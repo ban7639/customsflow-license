@@ -1,0 +1,45 @@
+name: renew-license
+
+# 언제 실행하나:
+#   1) 매월 1일 00:00 UTC (= 한국시간 오전 9시) 자동 실행
+#   2) 'Run workflow' 버튼으로 아무 때나 수동 실행(웹/폰에서 즉시 갱신·차단 반영)
+on:
+  schedule:
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+
+# license.json 을 저장소에 커밋하려면 쓰기 권한이 필요
+permissions:
+  contents: write
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 파이썬 준비
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: pynacl 설치
+        run: pip install pynacl
+
+      - name: 비밀키 복원 (GitHub Secret → 임시 파일)
+        run: printf '%s' "${{ secrets.LICENSE_PRIVATE_KEY }}" > license_private_key.txt
+
+      - name: 라이선스 서명 생성 (license.json)
+        run: python sign_license.py
+
+      - name: 비밀키 임시 파일 삭제
+        run: rm -f license_private_key.txt
+
+      - name: license.json 커밋 & 푸시
+        run: |
+          git config user.name  "github-actions"
+          git config user.email "github-actions@github.com"
+          git add license.json
+          git diff --staged --quiet || git commit -m "renew license"
+          git push
